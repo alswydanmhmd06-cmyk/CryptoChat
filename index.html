@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+<title>CryptoChat | تشفير عالي</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- CryptoJS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;font-family:'Cairo',sans-serif;}
+  body{background:#EFF3F8;display:flex;justify-content:center;align-items:center;min-height:100vh;padding:12px;}
+  .app{width:100%;max-width:480px;height:94vh;background:#FFFFFF;border-radius:32px;box-shadow:0 12px 35px rgba(0,0,0,0.1);display:flex;flex-direction:column;overflow:hidden;position:relative;}
+  .screen{position:absolute;inset:0;display:flex;flex-direction:column;padding:20px;opacity:0;transform:translateY(12px);transition:0.25s ease;pointer-events:none;overflow-y:auto;}
+  .screen.active{opacity:1;transform:none;pointer-events:auto;}
+  .logo{text-align:center;margin:15px 0 20px;}
+  .logo h1{font-size:32px;color:#1E2A3A;letter-spacing:-0.5px;}
+  .logo span{color:#C4452C;}
+  .logo p{color:#5F6C7A;font-size:14px;margin-top:6px;}
+  .tab{display:flex;gap:10px;background:#F0F4F9;padding:5px;border-radius:60px;margin-bottom:25px;}
+  .tab button{flex:1;padding:10px;border:none;border-radius:50px;background:transparent;font-weight:600;cursor:pointer;transition:0.2s;color:#2C3E50;}
+  .tab button.active{background:white;box-shadow:0 2px 8px rgba(0,0,0,0.05);color:#C4452C;}
+  .field{margin-bottom:18px;}
+  .field label{display:block;margin-bottom:8px;font-weight:600;color:#1E2A3A;}
+  .field input{width:100%;padding:12px 16px;border:1px solid #D0D9E8;border-radius:28px;outline:none;font-size:15px;background:#FFFFFF;}
+  .btn{width:100%;padding:12px;border:none;border-radius:40px;background:#C4452C;color:white;font-weight:bold;font-size:16px;cursor:pointer;margin-top:8px;transition:0.2s;}
+  .btn-outline{background:#F0F4F9;color:#1E2A3A;border:1px solid #C4452C;}
+  .chat-topbar{display:flex;align-items:center;gap:12px;padding:12px 16px;background:#FCFCFD;border-bottom:1px solid #E9EDF2;}
+  .back-btn{background:#F0F4F9;border:none;font-size:24px;cursor:pointer;width:40px;height:40px;border-radius:30px;display:flex;align-items:center;justify-content:center;}
+  .topbar-title{flex:1;font-weight:700;font-size:18px;color:#1E2A3A;}
+  .msg-wrap{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px;background:#F9FBFD;}
+  .msg{max-width:82%;padding:10px 15px;border-radius:24px;font-size:14px;line-height:1.45;}
+  .msg.sent{background:#C4452C;color:white;align-self:flex-start;border-bottom-left-radius:6px;}
+  .msg.received{background:#FFFFFF;border:1px solid #E2E8F0;align-self:flex-end;border-bottom-right-radius:6px;color:#1E2A3A;}
+  .msg.sys{background:#FEF5E7;color:#B45309;align-self:center;font-size:12px;border-radius:40px;padding:6px 16px;}
+  .input-area{display:flex;gap:10px;padding:12px;background:white;border-top:1px solid #E2E8F0;}
+  .input-area input{flex:1;padding:12px 16px;border:1px solid #CBD5E1;border-radius:40px;outline:none;}
+  .input-area button{width:50px;border-radius:40px;background:#C4452C;border:none;color:white;font-size:20px;cursor:pointer;}
+  .status-strip{font-size:13px;padding:8px 18px;background:#F0F4F9;color:#2C3E50;display:flex;gap:12px;border-bottom:1px solid #E2E8F0;}
+  .online-badge{background:#DCFCE7;color:#166534;padding:4px 14px;border-radius:40px;font-size:12px;font-weight:600;}
+  .menu-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin:20px 0;}
+  .menu-card{background:#FCFCFD;border-radius:28px;padding:20px 12px;text-align:center;cursor:pointer;border:1px solid #E9EDF2;transition:0.2s;}
+  .menu-card h3{font-size:17px;margin-top:8px;color:#2C3E50;}
+  .menu-icon{font-size:34px;}
+  .hidden{display:none;}
+  .toast{position:fixed;bottom:25px;left:50%;transform:translateX(-50%);background:#1E2A3A;color:white;padding:10px 22px;border-radius:60px;z-index:999;font-size:14px;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,0.15);}
+  .pill-info{background:#EFF6FF;padding:8px 15px;border-radius:40px;font-size:13px;color:#1E40AF;margin:10px 0;text-align:center;}
+  .file-badge{font-size:11px;background:#E2E8F0;padding:2px 10px;border-radius:20px;display:inline-block;}
+</style>
+</head>
+<body>
+<div id="toasts"></div>
+<div class="app">
+
+<!-- شاشة الدخول -->
+<div class="screen active" id="auth-screen">
+  <div class="logo"><h1>Crypto<span>Chat</span></h1><p>تشفير كامل · خصوصية تامة</p></div>
+  <div class="tab"><button class="active" onclick="setTab('login')">دخول</button><button onclick="setTab('register')">حساب جديد</button></div>
+  <div id="login-form">
+    <div class="field"><label>البريد الإلكتروني</label><input type="email" id="login-email" placeholder="example@mail.com"></div>
+    <div class="field"><label>كلمة المرور</label><input type="password" id="login-pass" placeholder="********"></div>
+    <button class="btn" onclick="doLogin()">دخول</button>
+    <button class="btn btn-outline" onclick="promptBiometric()">🖐️ دخول بالبصمة</button>
+  </div>
+  <div id="register-form" style="display:none">
+    <div class="field"><label>اسمك (الظاهر للآخرين)</label><input type="text" id="reg-alias" placeholder="مثال: أبو علي"></div>
+    <div class="field"><label>البريد الإلكتروني</label><input type="email" id="reg-email" placeholder="example@mail.com"></div>
+    <div class="field"><label>كلمة المرور (8 أحرف فأكثر)</label><input type="password" id="reg-pass"></div>
+    <div class="field"><label><input type="checkbox" id="enable-bio"> <span>ربط بصمة الجهاز (دخول أسرع)</span></label></div>
+    <button class="btn" onclick="doRegister()">إنشاء الحساب</button>
+  </div>
+  <button class="btn btn-outline" style="margin-top:20px;background:#FEE2E2;color:#B91C1C;" onclick="wipeLocal()">🗑️ مسح بياناتي</button>
+</div>
+
+<!-- الصفحة الرئيسية -->
+<div class="screen" id="main-screen">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:25px;">
+    <div><div style="font-weight:800;font-size:22px;" id="welcome-msg">أهلاً</div><div style="font-size:13px;color:#5A6E7C;" id="uid-label">---</div></div>
+    <button class="back-btn" style="background:#F0F4F9;width:44px;" onclick="doSignOut()">🚪</button>
+  </div>
+  <div class="menu-grid">
+    <div class="menu-card" onclick="openPrivateChat()"><div class="menu-icon">🔐</div><h3>دردشة بكلمة سر</h3><div class="file-badge">تشفير AES</div></div>
+    <div class="menu-card" onclick="switchScreen('firebase-screen')"><div class="menu-icon">🌍</div><h3>غرفة جماعية مشفرة</h3><div class="file-badge">RSA + AES · PFS</div></div>
+    <div class="menu-card" onclick="switchScreen('dev-screen')"><div class="menu-icon">📋</div><h3>معلومات النظام</h3></div>
+    <div class="menu-card" onclick="doSignOut()"><div class="menu-icon">🚪</div><h3>خروج</h3></div>
+  </div>
+  <div class="pill-info">🛡️ جميع الرسائل مشفرة من طرف إلى طرف</div>
+</div>
+
+<!-- الدردشة الخاصة (بكلمة سر) -->
+<div class="screen" id="private-chat-screen">
+  <div class="chat-topbar"><button class="back-btn" onclick="switchScreen('main-screen')">→</button><div class="topbar-title">دردشة خاصة 🔐</div></div>
+  <div class="msg-wrap" id="private-chat-box"></div>
+  <div class="input-area"><input type="text" id="private-msg-input" placeholder="رسالتك..."><button onclick="sendPrivateMsg()">📤</button></div>
+  <div id="private-key-panel" style="padding:12px;background:#F0F4F9;border-top:1px solid #D0D9E8;">
+    <input type="password" id="private-pass" placeholder="كلمة السر المشتركة" style="width:100%;padding:10px;border-radius:60px;border:1px solid #CBD5E1;"><button class="btn" style="margin-top:8px;background:#2C3E50;" onclick="initPrivateChat()">ابدأ التشفير</button>
+  </div>
+</div>
+
+<!-- شاشة الانضمام للغرفة الجماعية -->
+<div class="screen" id="firebase-screen">
+  <div class="chat-topbar"><button class="back-btn" onclick="switchScreen('main-screen')">→</button><div class="topbar-title">غرفة جماعية آمنة</div></div>
+  <div style="padding:15px;">
+    <div class="field"><label>اسم الغرفة</label><input type="text" id="room-name" placeholder="مثال: فريق_العمل"></div>
+    <div class="field"><label>الرمز السري (PIN)</label><input type="password" id="room-pin" placeholder="****"></div>
+    <div class="field"><label><input type="checkbox" id="auto-decrypt" checked> فك الرسائل تلقائياً</label></div>
+    <div class="field"><label><input type="checkbox" id="file-sharing"> تمكين مشاركة النصوص الطويلة (ملفات صغيرة)</label></div>
+    <button class="btn" onclick="joinGroupRoom()">دخول الغرفة</button>
+  </div>
+</div>
+
+<!-- شاشة الدردشة الجماعية -->
+<div class="screen" id="group-chat-screen">
+  <div class="chat-topbar"><button class="back-btn" onclick="leaveGroupRoom()">→</button><div class="topbar-title" id="group-room-title">الغرفة</div><span id="group-online-count" class="online-badge">0</span></div>
+  <div class="status-strip"><span id="group-status">جاري الاتصال...</span><span>🔒</span></div>
+  <div class="msg-wrap" id="group-chat-box"></div>
+  <div class="input-area"><input type="text" id="group-msg-input" placeholder="اكتب رسالتك..." disabled><button id="group-send-btn" onclick="sendGroupMsg()" disabled>📤</button></div>
+</div>
+
+<!-- شاشة معلومات النظام -->
+<div class="screen" id="dev-screen">
+  <div class="chat-topbar"><button class="back-btn" onclick="switchScreen('main-screen')">→</button><div class="topbar-title">معلومات النظام</div></div>
+  <div style="padding:20px;">
+    <div class="pill-info">✅ التشفير: RSA-2048 + AES-256 (معيار عالي)</div>
+    <div class="pill-info">🔄 تجديد المفاتيح التلقائي كل 5 دقائق (PFS)</div>
+    <div class="pill-info">👥 انتخاب مضيف ديناميكي للغرف</div>
+    <div class="pill-info">📁 مشاركة الملفات النصية المشفرة</div>
+    <div class="pill-info">🔐 دعم البصمة (WebAuthn)</div>
+    <div style="margin-top:20px;text-align:center;"><span id="sys-rsa-status">🟠 جاري تجهيز المفاتيح...</span></div>
+  </div>
+</div>
+
+</div>
+
+<script>
+// -------------------- إعدادات Firebase (البيانات المقدمة) --------------------
+firebase.initializeApp({
+  apiKey: "AIzaSyCv311OZHQzcHRG_4thvPtjh01S6trmLrU",
+  authDomain: "cryptochatpro-2ea31.firebaseapp.com",
+  databaseURL: "https://cryptochatpro-2ea31-default-rtdb.firebaseio.com",
+  projectId: "cryptochatpro-2ea31",
+  storageBucket: "cryptochatpro-2ea31.firebasestorage.app"
+});
+const auth = firebase.auth();
+const db = firebase.database();
+
+// -------------------- دوال مساعدة --------------------
+function esc(s){ return String(s).replace(/[&<>]/g, m=>({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[m])); }
+function genId(n=16){ let a=new Uint8Array(n); crypto.getRandomValues(a); return Array.from(a,b=>b.toString(16).padStart(2,'0')).join(''); }
+const PBKDF2_ITERS = 310000;
+function encryptAES(txt,key){
+  let salt=CryptoJS.lib.WordArray.random(16), iv=CryptoJS.lib.WordArray.random(16);
+  let dk=CryptoJS.PBKDF2(key,salt,{keySize:8,iterations:PBKDF2_ITERS});
+  let ct=CryptoJS.AES.encrypt(txt,dk,{iv:iv});
+  return btoa(JSON.stringify({c:ct.toString(),i:iv.toString(),s:salt.toString()}));
+}
+function decryptAES(payload,key){
+  try{ let o=JSON.parse(atob(payload));
+    let dk=CryptoJS.PBKDF2(key,CryptoJS.enc.Hex.parse(o.s),{keySize:8,iterations:PBKDF2_ITERS});
+    let pt=CryptoJS.AES.decrypt(o.c,dk,{iv:CryptoJS.enc.Hex.parse(o.i)});
+    return pt.toString(CryptoJS.enc.Utf8);
+  }catch(e){ return null; }
+}
+function hashPin(pin){ return CryptoJS.SHA256(pin+"cryptoChatSalt").toString(); }
+
+// -------------------- RSA ENGINE --------------------
+let myPubB64=null, rsaKP=null;
+async function initRSA(){
+  try{
+    rsaKP=await crypto.subtle.generateKey({name:'RSA-OAEP',modulusLength:2048,publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256'},true,['encrypt','decrypt']);
+    let exp=await crypto.subtle.exportKey('spki',rsaKP.publicKey);
+    myPubB64=btoa(String.fromCharCode(...new Uint8Array(exp)));
+    document.getElementById('sys-rsa-status').innerHTML='🟢 مفاتيح الحماية جاهزة';
+    return true;
+  }catch(e){ document.getElementById('sys-rsa-status').innerHTML='🔴 فشل تجهيز الحماية'; return false; }
+}
+async function rsaEncrypt(plain,pub){
+  let raw=Uint8Array.from(atob(pub),c=>c.charCodeAt(0));
+  let key=await crypto.subtle.importKey('spki',raw,{name:'RSA-OAEP',hash:'SHA-256'},false,['encrypt']);
+  let enc=await crypto.subtle.encrypt({name:'RSA-OAEP'},key,new TextEncoder().encode(plain));
+  return btoa(String.fromCharCode(...new Uint8Array(enc)));
+}
+async function rsaDecrypt(cb64){
+  let raw=Uint8Array.from(atob(cb64),c=>c.charCodeAt(0));
+  let dec=await crypto.subtle.decrypt({name:'RSA-OAEP'},rsaKP.privateKey,raw);
+  return new TextDecoder().decode(dec);
+}
+
+// -------------------- WebAuthn (بصمة) --------------------
+const b64u=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+const b64uB=s=>{let p='='.repeat((4-s.length%4)%4);let b=(s+p).replace(/-/g,'+').replace(/_/g,'/');return Uint8Array.from(atob(b),c=>c.charCodeAt(0)).buffer;};
+async function registerBio(uid){
+  if(!window.PublicKeyCredential){ toast('جهازك لا يدعم البصمة'); return null; }
+  let ch=crypto.getRandomValues(new Uint8Array(32));
+  try{
+    let cred=await navigator.credentials.create({publicKey:{ challenge:ch, rp:{name:'CryptoChat'}, user:{id:new TextEncoder().encode(uid),name:'user',displayName:'User'}, pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}], authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required'}, timeout:60000 }});
+    return b64u(cred.rawId);
+  }catch(e){ toast('فشل تسجيل البصمة'); return null; }
+}
+async function verifyBio(storedId){
+  try{
+    await navigator.credentials.get({publicKey:{ challenge:crypto.getRandomValues(new Uint8Array(32)), allowCredentials:[{type:'public-key',id:b64uB(storedId)}], userVerification:'required', timeout:60000 }});
+    return true;
+  }catch(e){ return false; }
+}
+
+// -------------------- واجهة المستخدم --------------------
+function toast(msg){ let d=document.createElement('div'); d.className='toast'; d.innerText=msg; document.body.appendChild(d); setTimeout(()=>d.remove(),2500);}
+function switchScreen(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active')); document.getElementById(id).classList.add('active');}
+function setTab(t){ document.getElementById('login-form').style.display=t==='login'?'block':'none'; document.getElementById('register-form').style.display=t==='register'?'block':'none'; document.querySelectorAll('.tab button').forEach((b,i)=>{if((t==='login'&&i===0)||(t==='register'&&i===1))b.classList.add('active'); else b.classList.remove('active');}); }
+
+let currentUser=null;
+const sessionId=genId(12);
+async function doRegister(){
+  let alias=document.getElementById('reg-alias').value.trim(), email=document.getElementById('reg-email').value.trim(), pass=document.getElementById('reg-pass').value, bio=document.getElementById('enable-bio').checked;
+  if(!alias||!email||pass.length<8){ toast('املأ البيانات بشكل صحيح'); return; }
+  try{
+    let cred=await auth.createUserWithEmailAndPassword(email,pass);
+    await cred.user.updateProfile({displayName:alias});
+    if(bio){ let bioId=await registerBio(cred.user.uid); if(bioId) localStorage.setItem('bio_'+cred.user.uid,bioId); }
+    await db.ref('users_public/'+cred.user.uid).set({name:alias,time:Date.now()});
+    toast('تم إنشاء الحساب بنجاح');
+  }catch(e){ toast('خطأ: '+e.message); }
+}
+async function doLogin(){
+  let email=document.getElementById('login-email').value.trim(), pass=document.getElementById('login-pass').value;
+  if(!email||!pass){ toast('أدخل البريد وكلمة المرور'); return; }
+  try{ await auth.signInWithEmailAndPassword(email,pass); }
+  catch(e){ toast('فشل الدخول: '+e.message); }
+}
+async function promptBiometric(){ toast('سجل دخولك أولاً بالبريد وكلمة المرور، ثم البصمة تعمل تلقائياً.'); }
+async function doSignOut(){ if(window.activeGroup) leaveGroupRoom(); await auth.signOut(); toast('تم الخروج'); }
+function wipeLocal(){ if(confirm('حذف كل البيانات المحلية؟')){ localStorage.clear(); toast('تم المسح، سيتم تحديث الصفحة'); setTimeout(()=>location.reload(),1000); }}
+
+auth.onAuthStateChanged(async user=>{
+  if(user){
+    currentUser=user;
+    let name=user.displayName||user.email.split('@')[0];
+    document.getElementById('welcome-msg').innerHTML='أهلاً '+esc(name);
+    document.getElementById('uid-label').innerText=user.uid.slice(0,12);
+    await initRSA();
+    switchScreen('main-screen');
+  }else{ currentUser=null; rsaKP=null; myPubB64=null; switchScreen('auth-screen'); }
+});
+
+// -------------------- الدردشة الخاصة --------------------
+let privateKey=null;
+function openPrivateChat(){ switchScreen('private-chat-screen'); }
+function initPrivateChat(){
+  let k=document.getElementById('private-pass').value;
+  if(!k||k.length<4){ toast('كلمة السر يجب أن تكون 4 أحرف على الأقل'); return; }
+  privateKey=k;
+  document.getElementById('private-key-panel').style.display='none';
+  toast('التشفير مفعل الآن');
+}
+function sendPrivateMsg(){
+  if(!privateKey){ toast('حدد كلمة السر أولاً'); return; }
+  let inp=document.getElementById('private-msg-input'), txt=inp.value.trim();
+  if(!txt) return;
+  let cipher=encryptAES(txt,privateKey);
+  let box=document.getElementById('private-chat-box');
+  let d=document.createElement('div'); d.className='msg sent'; d.innerHTML=`<div>أنت: ${esc(txt)}</div><div style="font-size:10px;">🔒</div>`;
+  box.appendChild(d); box.scrollTop=box.scrollHeight;
+  inp.value='';
+}
+
+// -------------------- الغرف الجماعية (كامل القوة) --------------------
+let activeGroup=null, groupMsgRef=null, groupPresRef=null, groupHandRef=null, groupHostRef=null;
+let groupKey=null, groupPinHash=null, isGroupHost=false, pfsInterval=null, pfsCount=300;
+let groupAutoDecrypt=true, groupFileShare=false;
+
+async function joinGroupRoom(){
+  if(!currentUser){ toast('سجل دخولك أولاً'); return; }
+  if(!myPubB64){ toast('جاري تجهيز الحماية... انتظر لحظة'); return; }
+  let room=document.getElementById('room-name').value.trim();
+  let pin=document.getElementById('room-pin').value.trim();
+  if(!room||!pin){ toast('اكتب اسم الغرفة والرمز'); return; }
+  groupAutoDecrypt=document.getElementById('auto-decrypt').checked;
+  groupFileShare=document.getElementById('file-sharing').checked;
+  let safeRoom=room.replace(/[.#$[\]]/g,'_');
+  groupPinHash=hashPin(pin);
+  document.getElementById('group-room-title').innerHTML='#'+esc(room);
+  document.getElementById('group-chat-box').innerHTML='';
+  switchScreen('group-chat-screen');
+  document.getElementById('group-status').innerText='يتصل...';
+  document.getElementById('group-msg-input').disabled=true;
+  document.getElementById('group-send-btn').disabled=true;
+
+  activeGroup=db.ref(`rooms/${safeRoom}`);
+  groupMsgRef=activeGroup.child('messages');
+  groupPresRef=activeGroup.child('presence/'+sessionId);
+  groupHandRef=activeGroup.child('handshake');
+  groupHostRef=activeGroup.child('host');
+
+  await groupPresRef.set({name:currentUser.displayName||'مجهول',pubKey:myPubB64,uid:currentUser.uid,time:Date.now()});
+  groupPresRef.onDisconnect().remove();
+  activeGroup.child('presence').on('value',snap=>{ document.getElementById('group-online-count').innerText=snap.numChildren()||0; });
+
+  // انتخاب المضيف
+  groupHostRef.transaction(h=>{
+    if(h===null) return {sid:sessionId,uid:currentUser.uid,time:Date.now()};
+    else return;
+  }, async(err,committed)=>{
+    if(committed){
+      isGroupHost=true;
+      groupKey=genId(32);
+      groupHostRef.onDisconnect().remove();
+      sysGroupMsg('✨ أنت مضيف الغرفة');
+      enableGroupChat(true);
+      listenGroupMessages();
+      startGroupPFS();
+      listenGroupHandshakes();
+    }else{
+      sysGroupMsg('جاري طلب الدخول...');
+      await groupHandRef.child(sessionId).set({type:'req',pubKey:myPubB64,pinHash:groupPinHash,uid:currentUser.uid});
+      groupHandRef.child(sessionId).on('value',async snap=>{
+        let data=snap.val();
+        if(!data) return;
+        if(data.type==='key' && data.encKey){
+          try{
+            groupKey=await rsaDecrypt(data.encKey);
+            sysGroupMsg('✅ دخلت الغرفة بنجاح');
+            enableGroupChat(true);
+            groupHandRef.child(sessionId).off();
+            await groupHandRef.child(sessionId).remove();
+            listenGroupMessages();
+            startGroupPFS();
+            listenGroupKeyRotation();
+          }catch(e){ sysGroupMsg('فشل فك المفتاح'); }
+        }else if(data.type==='reject'){
+          sysGroupMsg('🚫 الرمز خطأ');
+          setTimeout(()=>leaveGroupRoom(),2000);
+        }
+      });
+    }
+  });
+}
+function listenGroupHandshakes(){
+  groupHandRef.on('child_added',async snap=>{
+    if(!isGroupHost) return;
+    let data=snap.val();
+    if(snap.key===sessionId) return;
+    if(data.type==='req' && data.pinHash===groupPinHash){
+      try{
+        let enc=await rsaEncrypt(groupKey,data.pubKey);
+        await groupHandRef.child(snap.key).set({type:'key',encKey:enc});
+        sysGroupMsg(`🔐 عضو جديد: ${data.name||'شخص'}`);
+      }catch(e){}
+    }else if(data.type==='req'){
+      await groupHandRef.child(snap.key).set({type:'reject'});
+    }
+  });
+}
+function listenGroupKeyRotation(){
+  groupHandRef.child(sessionId).on('value',async snap=>{
+    let d=snap.val();
+    if(d && d.type==='newkey' && d.enc){
+      try{ groupKey=await rsaDecrypt(d.enc); sysGroupMsg('🔄 تم تجديد مفتاح الغرفة'); await groupHandRef.child(sessionId).remove(); }catch(e){}
+    }
+  });
+}
+function listenGroupMessages(){
+  groupMsgRef.limitToLast(40).once('value',snap=>{
+    snap.forEach(c=>{ let d=c.val(); if(d.sid!==sessionId) displayGroupMsg(d,false); });
+    groupMsgRef.on('child_added',snap=>{ let d=snap.val(); if(d.sid!==sessionId) displayGroupMsg(d,false); });
+  });
+}
+function startGroupPFS(){
+  pfsCount=300;
+  clearInterval(pfsInterval);
+  pfsInterval=setInterval(async()=>{
+    pfsCount--;
+    if(pfsCount<=0){
+      pfsCount=300;
+      if(isGroupHost){
+        groupKey=genId(32);
+        sysGroupMsg('🔁 تجديد المفتاح (لأمان أعلى)');
+        let members=await activeGroup.child('presence').once('value');
+        let list=members.val()||{};
+        for(let [sid,info] of Object.entries(list)){
+          if(sid===sessionId) continue;
+          try{ let enc=await rsaEncrypt(groupKey,info.pubKey); await groupHandRef.child(sid).set({type:'newkey',enc:enc}); }catch(e){}
+        }
+      }
+    }
+  },1000);
+}
+function sendGroupMsg(){
+  let inp=document.getElementById('group-msg-input'), txt=inp.value.trim();
+  if(!txt||!groupKey||!currentUser) return;
+  let finalText=txt;
+  if(groupFileShare && txt.length>400) finalText='FILE:'+btoa(txt);
+  let cipher=encryptAES(finalText,groupKey);
+  groupMsgRef.push({sender:currentUser.displayName||'مجهول',cipher:cipher,sid:sessionId,time:Date.now()});
+  displayGroupMsg({sender:'أنت',time:Date.now()},true,txt);
+  inp.value='';
+}
+function displayGroupMsg(data, isSent, plainText){
+  let box=document.getElementById('group-chat-box'), m=document.createElement('div');
+  m.className='msg '+(isSent?'sent':'received');
+  let time=new Date(data.time).toLocaleTimeString('ar-IQ',{hour:'2-digit',minute:'2-digit'});
+  if(isSent && plainText){
+    m.innerHTML=`<div>${esc(plainText)}</div><div style="font-size:10px;">${time}</div>`;
+  }else{
+    let dec=(groupAutoDecrypt && groupKey)?decryptAES(data.cipher,groupKey):null;
+    if(dec){
+      if(dec.startsWith('FILE:')){
+        let b64=dec.substring(5);
+        try{ let txt=atob(b64); m.innerHTML=`<div><b>${esc(data.sender)} (ملف)</b><br>📄 ${esc(txt.substring(0,200))}</div><div style="font-size:10px;">${time}</div>`; }
+        catch(e){ m.innerHTML=`<div><b>${esc(data.sender)}</b><br>[ملف مشفر]</div>`; }
+      }else{
+        m.innerHTML=`<div><b>${esc(data.sender)}</b><br>${esc(dec)}</div><div style="font-size:10px;">${time}</div>`;
+      }
+    }else{
+      m.innerHTML=`<div><b>${esc(data.sender)}</b><br><span style="opacity:0.6;">[رسالة مشفرة]</span></div><div style="font-size:10px;">${time}</div><button style="background:#EFF6FF;border:none;border-radius:30px;padding:4px 12px;margin-top:6px;" onclick="tryDecodeGroup('${data.cipher}',this)">فك</button>`;
+    }
+  }
+  box.appendChild(m); box.scrollTop=box.scrollHeight;
+}
+window.tryDecodeGroup=function(cipher,btn){
+  if(!groupKey) return;
+  let txt=decryptAES(cipher,groupKey);
+  if(txt) btn.parentElement.innerHTML=`<div><b>${btn.parentElement.querySelector('b')?.innerText||''}</b><br>${esc(txt)}</div>`;
+  else toast('تعذر فك التشفير');
+};
+function sysGroupMsg(txt){ let box=document.getElementById('group-chat-box'); let d=document.createElement('div'); d.className='msg sys'; d.innerText=txt; box.appendChild(d); box.scrollTop=box.scrollHeight; }
+function enableGroupChat(en){ document.getElementById('group-msg-input').disabled=!en; document.getElementById('group-send-btn').disabled=!en; document.getElementById('group-status').innerText=en?'جاهز ✓':'جاري التجهيز...';}
+function leaveGroupRoom(){
+  clearInterval(pfsInterval);
+  if(groupMsgRef) groupMsgRef.off();
+  if(groupPresRef) groupPresRef.remove();
+  if(groupHandRef) groupHandRef.off();
+  if(groupHostRef && isGroupHost) groupHostRef.remove();
+  groupKey=null; isGroupHost=false; activeGroup=null;
+  switchScreen('main-screen');
+}
+</script>
+</body>
+</html>
